@@ -1,1 +1,1 @@
-# bird-detection-challenge
+# bird_detection_challenge
