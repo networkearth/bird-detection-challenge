@@ -32,9 +32,12 @@ def build_spectrogram(
 def filter_spectrogram(
     spectrogram
 ):
+    # this just does median filtering along each frequency bin
     median_filtered = (
         (spectrogram.T > np.median(spectrogram, axis=1)) * (spectrogram.T) + (spectrogram.T <= np.median(spectrogram, axis=1)) * np.median(spectrogram, axis=1)
     ).T
+    # and then drops the frequency bin by its median 
+    # so the "noise" level is the same for each bin
     median_filtered = (
         (median_filtered.T - np.median(median_filtered, axis=1))
     ).T
