@@ -1,4 +1,5 @@
 import os
+from statistics import median
 import click
 import shutil
 import librosa
@@ -28,6 +29,24 @@ def build_spectrogram(
         return S_DB
     return None
 
+def filter_spectrogram(
+    spectrogram
+):
+    median_filtered = (
+        (spectrogram.T > np.median(spectrogram, axis=1)) * (spectrogram.T) + (spectrogram.T <= np.median(spectrogram, axis=1)) * np.median(spectrogram, axis=1)
+    ).T
+    median_filtered = (
+        (median_filtered.T - np.median(median_filtered, axis=1))
+    ).T
+    return median_filtered
+
+def prepare_for_img(data):
+    data -= data.min()
+    data /= data.max()
+    data *= 255
+    data = data.astype(np.uint8)
+    return data
+
 def load_song(file_path):
     y, sr = librosa.load(file_path)
     song, _ = librosa.effects.trim(y)
@@ -46,25 +65,30 @@ def main(input_dir, spectrogram_dir, overlap, frame_length, n_mels, labels_map):
     os.mkdir(spectrogram_dir)
 
     labels_map = {
-        int(row['itemid']): int(row['hasbird'])
+        str(row['itemid']): int(row['hasbird'])
         for _, row in pd.read_csv(labels_map).iterrows()
     }
 
-    spectrograms = []
-    labels = []
     for file_path in tqdm(os.listdir(input_dir)):
         input_file_path = os.path.join(input_dir, file_path)
         song, sr = load_song(input_file_path)
 
-        if len(song) / sr != 10.: continue
+        if len(song) / sr > 10.: 
+            song = song[:sr*10]
+
+        if len(song) / sr < 10:
+            song = np.pad(song, [(0, sr * 10 - (len(song)))])
 
         spectrogram = build_spectrogram(
             song, sr, overlap=overlap, frame_length=frame_length,
             n_mels=n_mels
         )
         if spectrogram is not None:
-            label = 'hasbird' if labels_map[int(file_path.split('.')[0])] == 1 else 'nobird'
-            root = '.'.join(file_path.split('.'))
+            spectrogram = filter_spectrogram(spectrogram)
+            spectrogram = prepare_for_img(spectrogram)
+
+            label = 'hasbird' if labels_map[file_path.split('.')[0]] == 1 else 'nobird'
+            root = '.'.join(file_path.split('.')[:-1])
             output_file_path = os.path.join(
                 spectrogram_dir, 
                 label, 
